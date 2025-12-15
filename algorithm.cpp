@@ -1,76 +1,119 @@
 #include "algorithm.h"
 
 #include <cmath>
-#include <functional>
-#include <iostream>
 #include <random>
 #include <vector>
 
-
-
-// Nie ma sprawdzania czy n jest poprawne, jeżeli nie jest to powinniśmy się wywalić;
-std::pair<std::vector<double>, double> perform_sequential_algorithm(const calc_function_t& calc_value,
-                                                                    std::vector<double> starting_x_0, const uint32_t n,
-                                                                    const int a, const int b)
+// Norma euklidesowa różnicy dwóch wektorów (kryterium Cauchy'ego)
+static double l2_norm_diff(const std::vector<double>& a, const std::vector<double>& b)
 {
-    // Step 1
-    uint16_t k = 0;
-    const uint16_t iteration_limit = 30;
-    double temperature = 500;
+    const size_t n = a.size();
+    double sum = 0.0;
+    for (size_t i = 0; i < n; ++i)
+    {
+        const double d = a[i] - b[i];
+        sum += d * d;
+    }
+    return std::sqrt(sum);
+}
+
+// Symulowane wyżarzanie (wersja sekwencyjna) zgodnie z podanym algorytmem.
+// Uwaga: generowanie x* jest globalne (jednostajnie w [a,b]^n), bo tak jest w treści zadania.
+std::pair<std::vector<double>, double> perform_sequential_algorithm(const calc_function_t& calc_value,
+                                                                    std::vector<double> starting_x_0,
+                                                                    const uint32_t n,
+                                                                    const int a,
+                                                                    const int b)
+{
+    // Krok 1: parametry (wg propozycji z treści)
+    const uint32_t L = 30;
+    double T = 500.0;
     const double alpha = 0.3;
-    const double epsilon = 0.1;
+    const double epsT = 0.1;
+
+    // Kryterium Cauchy'ego (opcjonalne).
+    // Dla Twojego losowania globalnego zwykle i tak się nie “zapali”.
+    // Jeśli chcesz włączyć: ustaw np. 1e-12.
+    const double cauchy_eps = 0.0;
+
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_real_distribution<double> distrib(0, 1);
+    std::uniform_real_distribution<double> U(0.0, 1.0);
 
-    std::vector<double> x_0 = starting_x_0;
-
-    std::vector<double> x_optimal = x_0;
-    while (true)
+    if (starting_x_0.size() != n)
     {
-        // Step 2
-        k = k + 1;
-        std::vector<double> x_prim = {};
-        x_prim.resize(n);
+        // prosto i proceduralnie; możesz też zrobić throw jeśli wolisz
+        starting_x_0.resize(n, 0.0);
+    }
 
-        for (int i = 0; i < n; ++i)
-        {
-            const double s_i = (distrib(gen));
-            x_prim[i] = s_i * (b - a) + a;
-        }
+    std::vector<double> x0 = std::move(starting_x_0);
+    double f_x0 = calc_value(x0, n);
 
-        // Step 3
-        const auto f_of_x_prim = calc_value(x_prim, n);
-        const auto f_of_x_0 = calc_value(x_prim, n);
-        if (f_of_x_prim < f_of_x_0)
+    std::vector<double> xopt = x0;
+    double f_opt = f_x0;
+
+    while (T > epsT)
+    {
+        for (uint32_t k = 0; k < L; ++k)
         {
-            std::swap(x_0, x_prim);
-            std::swap(x_optimal, x_prim);
-        }
-        else
-        {
-            // Step 4
-            double r = distrib(gen);
-            if (r < std::exp((f_of_x_0 - f_of_x_prim) / temperature))
+            // Krok 2: losowanie x*
+            std::vector<double> x_star(n);
+            for (uint32_t i = 0; i < n; ++i)
             {
-                std::swap(x_0, x_prim);
+                const double s_i = U(gen);
+                x_star[i] = static_cast<double>(a) + s_i * (static_cast<double>(b) - static_cast<double>(a));
             }
-        }
-        // Step 5
-        if (k > iteration_limit)
-        {
-            // Step 6
-            temperature = temperature * (1 - alpha);
-            if (temperature > epsilon)
+
+            const double f_star = calc_value(x_star, n);
+
+            bool accepted = false;
+            double step_norm = 0.0;
+
+            // Krok 3
+            if (f_star < f_x0)
             {
-                k = 0;
+                accepted = true;
+                if (cauchy_eps > 0.0) step_norm = l2_norm_diff(x0, x_star);
+
+                x0 = x_star;
+                f_x0 = f_star;
+
+                // globalnie najlepszy punkt
+                if (f_star < f_opt)
+                {
+                    xopt = x_star;
+                    f_opt = f_star;
+                }
             }
             else
             {
-                break;
+                // Krok 4
+                const double r = U(gen);
+                const double p = std::exp((f_x0 - f_star) / T);
+
+                if (r < p)
+                {
+                    accepted = true;
+                    if (cauchy_eps > 0.0) step_norm = l2_norm_diff(x0, x_star);
+
+                    x0 = x_star;
+                    f_x0 = f_star;
+                }
+            }
+
+            // (opcjonalnie) kryterium Cauchy'ego
+            if (cauchy_eps > 0.0 && accepted)
+            {
+                if (step_norm < cauchy_eps)
+                {
+                    return {xopt, f_opt};
+                }
             }
         }
+
+        // Krok 6
+        T *= (1.0 - alpha);
     }
 
-    return std::make_pair(x_optimal, calc_value(x_optimal, n));
+    return {xopt, f_opt};
 }
