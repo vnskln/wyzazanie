@@ -1,7 +1,3 @@
-//
-// Created by michal.chudzik on 14.12.2025.
-//
-
 #ifndef SIMULATED_ANNEALING_H
 #define SIMULATED_ANNEALING_H
 

@@ -4,6 +4,7 @@
 #include <random>
 #include <vector>
 #include <algorithm>
+#include <iostream>
 
 // Norma euklidesowa różnicy dwóch wektorów (kryterium Cauchy'ego)
 static double l2_norm_diff(const std::vector<double>& a, const std::vector<double>& b)
@@ -32,7 +33,9 @@ std::pair<std::vector<double>, double> perform_sequential_algorithm(const calc_f
     const double alpha = 0.3;
     const double epsT = 0.1;
 
-    const double cauchy_eps = 0.0;
+    const double cauchy_eps = (b - a) * std::sqrt(n / 6.0) * 1e-3; // 1000 times smaller than the expected step size
+    const uint16_t cauchy_max_steps = 10;
+    uint16_t cauchy_steps = 0;
 
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -107,6 +110,14 @@ std::pair<std::vector<double>, double> perform_sequential_algorithm(const calc_f
             {
                 if (step_norm < cauchy_eps)
                 {
+                    cauchy_steps++;
+                }
+                else{
+                    cauchy_steps = 0;
+                }
+                if(cauchy_steps > cauchy_max_steps )
+                {
+                    std::cout << std::endl << "Quitting algorithm due to Cauchy criterion" << std::endl;
                     return {xopt, f_opt};
                 }
             }
