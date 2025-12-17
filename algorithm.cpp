@@ -3,6 +3,8 @@
 #include <cmath>
 #include <random>
 #include <vector>
+#include <algorithm>
+#include <iostream>
 
 // Norma euklidesowa różnicy dwóch wektorów (kryterium Cauchy'ego)
 static double l2_norm_diff(const std::vector<double>& a, const std::vector<double>& b)
@@ -17,7 +19,7 @@ static double l2_norm_diff(const std::vector<double>& a, const std::vector<doubl
     return std::sqrt(sum);
 }
 
-// Symulowane wyżarzanie (wersja sekwencyjna) zgodnie z podanym algorytmem.
+// Symulowane wyżarzanie (wersja sekwencyjna).
 // Uwaga: generowanie x* jest globalne (jednostajnie w [a,b]^n), bo tak jest w treści zadania.
 std::pair<std::vector<double>, double> perform_sequential_algorithm(const calc_function_t& calc_value,
                                                                     std::vector<double> starting_x_0,
@@ -31,10 +33,9 @@ std::pair<std::vector<double>, double> perform_sequential_algorithm(const calc_f
     const double alpha = 0.3;
     const double epsT = 0.1;
 
-    // Kryterium Cauchy'ego (opcjonalne).
-    // Dla Twojego losowania globalnego zwykle i tak się nie “zapali”.
-    // Jeśli chcesz włączyć: ustaw np. 1e-12.
-    const double cauchy_eps = 0.0;
+    const double cauchy_eps = (b - a) * std::sqrt(n / 6.0) * 1e-3; // 1000 times smaller than the expected step size
+    const uint16_t cauchy_max_steps = 10;
+    uint16_t cauchy_steps = 0;
 
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -42,7 +43,6 @@ std::pair<std::vector<double>, double> perform_sequential_algorithm(const calc_f
 
     if (starting_x_0.size() != n)
     {
-        // prosto i proceduralnie; możesz też zrobić throw jeśli wolisz
         starting_x_0.resize(n, 0.0);
     }
 
@@ -73,12 +73,14 @@ std::pair<std::vector<double>, double> perform_sequential_algorithm(const calc_f
             if (f_star < f_x0)
             {
                 accepted = true;
-                if (cauchy_eps > 0.0) step_norm = l2_norm_diff(x0, x_star);
+                if (cauchy_eps > 0.0) 
+                {
+                    step_norm = l2_norm_diff(x0, x_star);
+                }
 
                 x0 = x_star;
                 f_x0 = f_star;
 
-                // globalnie najlepszy punkt
                 if (f_star < f_opt)
                 {
                     xopt = x_star;
@@ -89,23 +91,33 @@ std::pair<std::vector<double>, double> perform_sequential_algorithm(const calc_f
             {
                 // Krok 4
                 const double r = U(gen);
-                const double p = std::exp((f_x0 - f_star) / T);
 
-                if (r < p)
+                if (r < std::exp((f_x0 - f_star) / T))
                 {
                     accepted = true;
-                    if (cauchy_eps > 0.0) step_norm = l2_norm_diff(x0, x_star);
+                    if (cauchy_eps > 0.0) 
+                    {
+                        step_norm = l2_norm_diff(x0, x_star);
+                    }
 
                     x0 = x_star;
                     f_x0 = f_star;
                 }
             }
 
-            // (opcjonalnie) kryterium Cauchy'ego
+            // kryterium Cauchy'ego
             if (cauchy_eps > 0.0 && accepted)
             {
                 if (step_norm < cauchy_eps)
                 {
+                    cauchy_steps++;
+                }
+                else{
+                    cauchy_steps = 0;
+                }
+                if(cauchy_steps > cauchy_max_steps )
+                {
+                    std::cout << std::endl << "Quitting algorithm due to Cauchy criterion" << std::endl;
                     return {xopt, f_opt};
                 }
             }
