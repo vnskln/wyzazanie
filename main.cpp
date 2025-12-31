@@ -3,64 +3,173 @@
 #include <chrono>
 #include <cmath>
 #include <iostream>
+#include <mpi.h>
 #include <random>
 #include <vector>
 
 
-int main() {
+int main(int argc, char *argv[]) {
+  // Inicjalizacja MPI
+  MPI_Init(&argc, &argv);
 
-  // Równanie kwadratowe
-  uint32_t n = 800000;
-  std::vector<double> x_0 = make_quadratic_x0(n);
-  auto start_q = std::chrono::high_resolution_clock::now();
+  int rank, size;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-  auto quadratic_result =
-      perform_sequential_algorithm(calc_quadratic_function, x_0, n, -5, 5);
+  const uint32_t n = 800000;
 
-  auto end_q = std::chrono::high_resolution_clock::now();
-  auto dur_q =
-      std::chrono::duration_cast<std::chrono::milliseconds>(end_q - start_q)
-          .count();
-  std::cout << "Sequential execution time for quadratic equation: " << dur_q
-            << "ms Euclidean norm of result: "
-            << l2_norm(quadratic_result.first) << std::endl;
+  // =========================================================================
+  // Test 1: Równanie kwadratowe
+  // =========================================================================
+  if (rank == 0) {
+    std::cout << "=== Testing Quadratic Function ===" << std::endl;
+    std::cout << "n = " << n << ", processes = " << size << std::endl;
+  }
 
-  // Równanie Woodsa
-  n = 800000;
-  x_0 = make_woods_x0(n);
-  auto start_woods = std::chrono::high_resolution_clock::now();
+  // Wersja sekwencyjna (tylko na procesie 0)
+  if (rank == 0) {
+    std::vector<double> x_0 = make_quadratic_x0(n);
+    auto start_q = std::chrono::high_resolution_clock::now();
 
-  auto woods_result =
-      perform_sequential_algorithm(calc_woods_function, x_0, n, -5, 5);
+    auto quadratic_result =
+        perform_sequential_algorithm(calc_quadratic_function, x_0, n, -5, 5);
 
-  auto end_woods = std::chrono::high_resolution_clock::now();
-  auto dur_woods = std::chrono::duration_cast<std::chrono::milliseconds>(
-                       end_woods - start_woods)
-                       .count();
+    auto end_q = std::chrono::high_resolution_clock::now();
+    auto dur_q =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end_q - start_q)
+            .count();
+    std::cout << "Sequential execution time: " << dur_q
+              << "ms, Euclidean norm: " << l2_norm(quadratic_result.first)
+              << std::endl;
+  }
 
-  std::cout << "Sequential execution time for woods equation: " << dur_woods
-            << "ms Euclidean norm of result: "
-            << l2_norm_distance_to_woods_min(woods_result.first, n)
-            << std::endl;
+  MPI_Barrier(MPI_COMM_WORLD);
 
-  // Równanie Powella (osobliwe)
-  n = 800000;
-  x_0 = make_powell_x0(n);
+  // Wersja równoległa
+  {
+    std::vector<double> x_0 = make_quadratic_x0(n);
 
-  auto start_powell = std::chrono::high_resolution_clock::now();
+    auto start_p = std::chrono::high_resolution_clock::now();
 
-  auto powell_singular_result = perform_sequential_algorithm(
-      calc_powell_singular_function, x_0, n, -4, 4);
+    auto parallel_result = perform_parallel_algorithm(
+        calc_quadratic_function_partial, x_0, n, -5, 5, 1);
 
-  auto end_powell = std::chrono::high_resolution_clock::now();
-  auto dur_powell = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        end_powell - start_powell)
-                        .count();
+    auto end_p = std::chrono::high_resolution_clock::now();
+    auto dur_p =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end_p - start_p)
+            .count();
 
-  std::cout << "Sequential execution time for powell equation: " << dur_powell
-            << "ms Euclidean norm of minimum result: "
-            << l2_norm_distance_to_powell_min(powell_singular_result.first, n)
-            << std::endl;
+    if (rank == 0) {
+      std::cout << "Parallel execution time:   " << dur_p
+                << "ms, Euclidean norm: " << l2_norm(parallel_result.first)
+                << std::endl;
+    }
+  }
 
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  // =========================================================================
+  // Test 2: Równanie Woodsa
+  // =========================================================================
+  if (rank == 0) {
+    std::cout << "\n=== Testing Woods Function ===" << std::endl;
+  }
+
+  // Wersja sekwencyjna (tylko na procesie 0)
+  if (rank == 0) {
+    std::vector<double> x_0 = make_woods_x0(n);
+    auto start_w = std::chrono::high_resolution_clock::now();
+
+    auto woods_result =
+        perform_sequential_algorithm(calc_woods_function, x_0, n, -5, 5);
+
+    auto end_w = std::chrono::high_resolution_clock::now();
+    auto dur_w =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end_w - start_w)
+            .count();
+    std::cout << "Sequential execution time: " << dur_w
+              << "ms, Distance to minimum: "
+              << l2_norm_distance_to_woods_min(woods_result.first, n)
+              << std::endl;
+  }
+
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  // Wersja równoległa
+  {
+    std::vector<double> x_0 = make_woods_x0(n);
+
+    auto start_p = std::chrono::high_resolution_clock::now();
+
+    auto parallel_result = perform_parallel_algorithm(
+        calc_woods_function_partial, x_0, n, -5, 5, 4); // block_alignment = 4
+
+    auto end_p = std::chrono::high_resolution_clock::now();
+    auto dur_p =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end_p - start_p)
+            .count();
+
+    if (rank == 0) {
+      std::cout << "Parallel execution time:   " << dur_p
+                << "ms, Distance to minimum: "
+                << l2_norm_distance_to_woods_min(parallel_result.first, n)
+                << std::endl;
+    }
+  }
+
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  // =========================================================================
+  // Test 3: Równanie Powella (osobliwe)
+  // =========================================================================
+  if (rank == 0) {
+    std::cout << "\n=== Testing Powell Singular Function ===" << std::endl;
+  }
+
+  // Wersja sekwencyjna (tylko na procesie 0)
+  if (rank == 0) {
+    std::vector<double> x_0 = make_powell_x0(n);
+    auto start_p = std::chrono::high_resolution_clock::now();
+
+    auto powell_result = perform_sequential_algorithm(
+        calc_powell_singular_function, x_0, n, -4, 4);
+
+    auto end_p = std::chrono::high_resolution_clock::now();
+    auto dur_p =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end_p - start_p)
+            .count();
+    std::cout << "Sequential execution time: " << dur_p
+              << "ms, Distance to minimum: "
+              << l2_norm_distance_to_powell_min(powell_result.first, n)
+              << std::endl;
+  }
+
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  // Wersja równoległa
+  {
+    std::vector<double> x_0 = make_powell_x0(n);
+
+    auto start_p = std::chrono::high_resolution_clock::now();
+
+    auto parallel_result =
+        perform_parallel_algorithm(calc_powell_singular_function_partial, x_0,
+                                   n, -4, 4, 4); // block_alignment = 4
+
+    auto end_p = std::chrono::high_resolution_clock::now();
+    auto dur_p =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end_p - start_p)
+            .count();
+
+    if (rank == 0) {
+      std::cout << "Parallel execution time:   " << dur_p
+                << "ms, Distance to minimum: "
+                << l2_norm_distance_to_powell_min(parallel_result.first, n)
+                << std::endl;
+    }
+  }
+
+  // Finalizacja MPI
+  MPI_Finalize();
   return 0;
 }
