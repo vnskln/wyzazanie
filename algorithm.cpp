@@ -24,7 +24,7 @@ static double l2_norm_diff(const std::vector<double> &a,
 std::pair<std::vector<double>, double>
 perform_sequential_algorithm(const calc_function_t &calc_value,
                              std::vector<double> starting_x_0, const uint32_t n,
-                             const int a, const int b) {
+                             const int a, const int b, const bool debug) {
   // Krok 1: parametry (wg propozycji z treści)
   const uint32_t L = 30;
   double T = 500.0;
@@ -94,6 +94,12 @@ perform_sequential_algorithm(const calc_function_t &calc_value,
         }
       }
 
+      if (debug) {
+        std::cout << "Iteration " << T << ", k=" << k << ": Candidate "
+                  << (accepted ? "ACCEPTED" : "REJECTED")
+                  << " (f_star=" << f_star << ")" << std::endl;
+      }
+
       // Kryterium Cauchy'ego
       if (cauchy_eps > 0.0 && accepted) {
         if (step_norm < cauchy_eps) {
@@ -128,7 +134,7 @@ std::pair<std::vector<double>, double>
 perform_parallel_algorithm(const calc_function_partial_t &calc_value_partial,
                            std::vector<double> starting_x_0, const uint32_t n,
                            const int a, const int b,
-                           const uint32_t block_alignment) {
+                           const uint32_t block_alignment, const bool debug) {
   int rank, size;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &size);
@@ -238,6 +244,12 @@ perform_parallel_algorithm(const calc_function_partial_t &calc_value_partial,
         }
       }
       MPI_Bcast(&accepted, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+      if (debug && rank == 0) {
+        std::cout << "Iteration " << T << ", k=" << k << ": Candidate "
+                  << (accepted ? "ACCEPTED" : "REJECTED")
+                  << " (f_star=" << f_star << ")" << std::endl;
+      }
 
       // Aktualizacja lokalnych danych jeśli zaakceptowano kandydata
       if (accepted) {
