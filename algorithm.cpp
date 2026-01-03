@@ -84,10 +84,10 @@ perform_sequential_algorithm(const calc_function_t &calc_value,
   std::vector<double> xopt = x0;
   double f_opt = f_x0;
 
+  std::vector<double> x_star(n);
   while (T > epsT) {
     for (uint32_t k = 0; k < L; ++k) {
       // Krok 2: losowanie x*
-      std::vector<double> x_star(n);
       for (uint32_t i = 0; i < n; ++i) {
         x_star[i] = static_cast<double>(a) +
                     U(gen) * (static_cast<double>(b) - static_cast<double>(a));
@@ -221,10 +221,10 @@ std::pair<std::vector<double>, double> perform_parallel_algorithm_win(
 
   double f_opt = f_x0;
 
+  std::vector<double> local_x_star(local_n);
   while (T > epsT) {
     for (uint32_t k = 0; k < L; ++k) {
       // Obliczenie przez każdy proces swojej części x*
-      std::vector<double> local_x_star(local_n);
       for (uint32_t i = 0; i < local_n; ++i) {
         local_x_star[i] =
             static_cast<double>(a) +
